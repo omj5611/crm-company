@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
+import { BlankPage } from './components/BlankPage';
 
 type SidebarItem = {
   label: string;
@@ -27,6 +28,7 @@ type FavoriteCourse = {
 
 type CompanyRow = {
   name: string;
+  representativeName: string;
   businessRegistrationNumber: string;
   tags: string[];
   primaryIndustry: string;
@@ -52,6 +54,7 @@ type CompanyRow = {
 
 type CompanyDetailEditDraft = {
   name: string;
+  representativeName: string;
   businessRegistrationNumber: string;
   address: string;
   websiteUrl: string;
@@ -66,6 +69,7 @@ type CompanyDetailEditDraft = {
 type CompanyRegisterDraft = {
   id: string;
   name: string;
+  representativeName: string;
   businessRegistrationNumber: string;
   primaryIndustry: string;
   detailIndustry: string;
@@ -83,10 +87,23 @@ type CompanyRegisterContactDraft = {
   id: string;
   name: string;
   companyName: string;
+  position: string;
   phone: string;
   email: string;
   participationItems: string[];
   department: string;
+};
+
+type FilterGroup = {
+  key: string;
+  label: string;
+  iconSrc?: string;
+  options: string[];
+};
+
+type IndustryOption = {
+  primary: string;
+  details: string[];
 };
 
 type SearchResultKind = '메뉴' | '필터' | '기업' | '즐겨찾기' | '작업';
@@ -116,6 +133,7 @@ type CompanyDetailContact = {
   id: string;
   companyName: string;
   name: string;
+  position: string;
   status: '가입완료' | '미가입';
   joinedAt?: string;
   department: string;
@@ -131,6 +149,7 @@ type CompanyDetailContactEditDraft = {
   companyName: string;
   status: CompanyDetailContact['status'];
   name: string;
+  position: string;
   department: string;
   email: string;
   phone: string;
@@ -263,7 +282,7 @@ type SidebarUtilityItem = {
 
 const sidebarItems: SidebarItem[] = [
   {
-    label: '교육과정 관리',
+    label: '사업 관리',
     iconSrc: '/assets/edu.svg',
     children: [
       { label: '전체 교육과정 리스트', iconSrc: '/assets/edu.svg' },
@@ -348,6 +367,7 @@ const initialCompanyDetailContacts: CompanyDetailContact[] = [
     id: 'contact-1',
     companyName: '스나이퍼팩토리',
     name: '홍길동',
+    position: '팀장',
     status: '가입완료',
     joinedAt: '2026.02.20',
     department: '교육마케팅',
@@ -366,6 +386,7 @@ const initialCompanyDetailContacts: CompanyDetailContact[] = [
     id: 'contact-2',
     companyName: '스나이퍼팩토리',
     name: '김민지',
+    position: '매니저',
     status: '미가입',
     department: '교육마케팅',
     email: 'minji@company.com',
@@ -378,6 +399,7 @@ const initialCompanyDetailContacts: CompanyDetailContact[] = [
     id: 'contact-3',
     companyName: '스나이퍼팩토리',
     name: '박서준',
+    position: '실장',
     status: '가입완료',
     joinedAt: '2026.01.18',
     department: '사업기획',
@@ -391,6 +413,7 @@ const initialCompanyDetailContacts: CompanyDetailContact[] = [
     id: 'contact-4',
     companyName: '스나이퍼팩토리',
     name: '이하늘',
+    position: '대리',
     status: '가입완료',
     joinedAt: '2025.12.09',
     department: '운영지원',
@@ -444,7 +467,7 @@ const initialDownloadHistoryEntries: DownloadHistoryEntry[] = [
 const actionLabels = ['기업 등록', '문자 보내기', '전체 다운로드', '초기화'];
 const defaultSearchHistory = ['기업 등록', '스나이퍼팩토리', '전체 다운로드', '참여이력', '서비스 바로가기'];
 const toolbarTagFilterLabel = 'SaaS';
-const filterGroups = [
+const filterGroups: readonly FilterGroup[] = [
   {
     key: 'region',
     label: '지역 선택',
@@ -477,7 +500,7 @@ const filterGroups = [
     options: ['전체', '가입완료', '미가입'],
   },
 ] as const;
-const industryOptions = [
+const industryOptions: IndustryOption[] = [
   {
     primary: 'IT·소프트웨어',
     details: ['SaaS', '플랫폼', '앱/웹 서비스', '시스템 개발', 'SI/SM'],
@@ -682,6 +705,7 @@ const createCompanyRegisterContactDraft = (companyName = ''): CompanyRegisterCon
   id: `contact-draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   name: '',
   companyName,
+  position: '',
   phone: '',
   email: '',
   participationItems: [],
@@ -692,6 +716,7 @@ const createCompanyContactRegisterDraft = (companyName = ''): CompanyRegisterCon
   id: `company-contact-draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   name: '',
   companyName,
+  position: '',
   phone: '',
   email: '',
   participationItems: [],
@@ -701,6 +726,7 @@ const createCompanyContactRegisterDraft = (companyName = ''): CompanyRegisterCon
 const createCompanyRegisterDraft = (): CompanyRegisterDraft => ({
   id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   name: '',
+  representativeName: '',
   businessRegistrationNumber: '',
   primaryIndustry: industryOptions[0]?.primary ?? '',
   detailIndustry: industryOptions[0]?.details[0] ?? '',
@@ -738,6 +764,7 @@ const createCompanyDetailContactEditDraft = (contact: CompanyDetailContact): Com
   companyName: contact.companyName,
   status: contact.status,
   name: contact.name,
+  position: contact.position,
   department: contact.department,
   email: contact.email,
   phone: contact.phone,
@@ -897,6 +924,7 @@ function useDropdownAlignment(isOpen: boolean) {
 const initialCompanyRows: CompanyRow[] = [
   {
     name: '스팩스페이스',
+    representativeName: '오민진',
     businessRegistrationNumber: '123-45-67890',
     tags: ['IT·소프트웨어', '앱/웹 서비스', '시스템 개발', 'SaaS'],
     primaryIndustry: 'IT·소프트웨어',
@@ -921,6 +949,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '메타플로우',
+    representativeName: '김서연',
     businessRegistrationNumber: '234-56-78901',
     tags: ['AI·데이터', '데이터 분석', '머신러닝', '자동화'],
     primaryIndustry: 'AI·데이터',
@@ -944,6 +973,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '넥스트코어',
+    representativeName: '박지훈',
     businessRegistrationNumber: '345-67-89012',
     tags: ['제조·하드웨어', '전자기기', 'IoT 디바이스', '장비'],
     primaryIndustry: '제조·하드웨어',
@@ -966,6 +996,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '브릿지커머스',
+    representativeName: '이수민',
     businessRegistrationNumber: '456-78-90123',
     tags: ['커머스·유통', '이커머스', '리테일', '물류 유통'],
     primaryIndustry: '커머스·유통',
@@ -988,6 +1019,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '애드브릿지',
+    representativeName: '정다은',
     businessRegistrationNumber: '567-89-01234',
     tags: ['마케팅·광고', '퍼포먼스 마케팅', '브랜딩', '콘텐츠 마케팅'],
     primaryIndustry: '마케팅·광고',
@@ -1010,6 +1042,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '크리에이티브랩',
+    representativeName: '한지훈',
     businessRegistrationNumber: '678-90-12345',
     tags: ['디자인·콘텐츠', 'UX/UI', '그래픽 디자인', '영상'],
     primaryIndustry: '디자인·콘텐츠',
@@ -1032,6 +1065,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '에듀하버',
+    representativeName: '최유진',
     businessRegistrationNumber: '789-01-23456',
     tags: ['교육·에듀테크', '온라인 교육', '학습 플랫폼', '교육 콘텐츠'],
     primaryIndustry: '교육·에듀테크',
@@ -1054,6 +1088,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '파이낸스링크',
+    representativeName: '윤태호',
     businessRegistrationNumber: '890-12-34567',
     tags: ['금융·핀테크', '결제', '자산관리', '금융 플랫폼'],
     primaryIndustry: '금융·핀테크',
@@ -1076,6 +1111,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '헬스코어',
+    representativeName: '장민서',
     businessRegistrationNumber: '901-23-45678',
     tags: ['헬스케어·바이오', '디지털 헬스케어', '의료기기', '바이오'],
     primaryIndustry: '헬스케어·바이오',
@@ -1098,6 +1134,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '플레이웍스',
+    representativeName: '송하늘',
     businessRegistrationNumber: '012-34-56789',
     tags: ['게임·엔터테인먼트', '게임 개발', '퍼블리싱', 'IP 비즈니스'],
     primaryIndustry: '게임·엔터테인먼트',
@@ -1120,6 +1157,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '미디어웨이브',
+    representativeName: '박소연',
     businessRegistrationNumber: '123-56-78901',
     tags: ['미디어·출판', '뉴스', 'MCN', '출판'],
     primaryIndustry: '미디어·출판',
@@ -1142,6 +1180,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '푸드플래닛',
+    representativeName: '김태윤',
     businessRegistrationNumber: '234-67-89012',
     tags: ['식품·외식', 'F&B', '프랜차이즈', '레스토랑'],
     primaryIndustry: '식품·외식',
@@ -1164,6 +1203,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '리빙스톤',
+    representativeName: '이서현',
     businessRegistrationNumber: '345-78-90123',
     tags: ['부동산·건설', '프롭테크', '인테리어', '시공'],
     primaryIndustry: '부동산·건설',
@@ -1186,6 +1226,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '모빌리티원',
+    representativeName: '오세진',
     businessRegistrationNumber: '456-89-01234',
     tags: ['모빌리티·자동차', '차량 서비스', '운송', '자율주행'],
     primaryIndustry: '모빌리티·자동차',
@@ -1208,6 +1249,7 @@ const initialCompanyRows: CompanyRow[] = [
   },
   {
     name: '그린웨이브',
+    representativeName: '문지우',
     businessRegistrationNumber: '567-90-12345',
     tags: ['환경·에너지', '재생에너지', 'ESG', '탄소관리'],
     primaryIndustry: '환경·에너지',
@@ -1294,6 +1336,9 @@ export default function App() {
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [copyToastMounted, setCopyToastMounted] = useState(false);
   const [copyToastVisible, setCopyToastVisible] = useState(false);
+  const [saveModalMounted, setSaveModalMounted] = useState(false);
+  const [saveModalVisible, setSaveModalVisible] = useState(false);
+  const [saveModalMessage, setSaveModalMessage] = useState('');
   const [statusToastMounted, setStatusToastMounted] = useState(false);
   const [statusToastVisible, setStatusToastVisible] = useState(false);
   const [statusToastMessage, setStatusToastMessage] = useState('');
@@ -1399,11 +1444,14 @@ export default function App() {
   const companyDetailLogoMenuRef = useRef<HTMLDivElement | null>(null);
   const titleActionsRef = useRef<HTMLDivElement | null>(null);
   const filtersControlsRef = useRef<HTMLDivElement | null>(null);
-  const companyCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const companyCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const highlightTimerRef = useRef<number | null>(null);
   const copyToastFrameRef = useRef<number | null>(null);
   const copyToastTimerRef = useRef<number | null>(null);
   const copyToastExitTimerRef = useRef<number | null>(null);
+  const saveModalFrameRef = useRef<number | null>(null);
+  const saveModalTimerRef = useRef<number | null>(null);
+  const saveModalExitTimerRef = useRef<number | null>(null);
   const statusToastFrameRef = useRef<number | null>(null);
   const statusToastTimerRef = useRef<number | null>(null);
   const statusToastExitTimerRef = useRef<number | null>(null);
@@ -1552,8 +1600,8 @@ export default function App() {
   const visibleCompanyRows = useMemo(() => {
     const normalizedCompanyQuery = companySearchQuery.trim().toLowerCase();
     const selectedProvinceLabel = selectedRegionProvince === '전체' ? '' : selectedRegionProvince.replace(/특별시|광역시|특별자치시/g, '');
-    const selectedIndustryPrimarySet = new Set(selectedIndustryPrimaries);
-    const selectedIndustryDetailSet = new Set(selectedIndustryDetails);
+    const selectedIndustryPrimarySet = new Set<string>(selectedIndustryPrimaries);
+    const selectedIndustryDetailSet = new Set<string>(selectedIndustryDetails);
     const parsedInsuredMin = parseNumericInput(insuredCustomMin);
     const parsedInsuredMax = parseNumericInput(insuredCustomMax);
     const parsedRevenueMin = parseNumericInput(revenueMin);
@@ -1626,6 +1674,7 @@ export default function App() {
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? openTabs[0];
   const activeTabLabel = activeTab?.sidebarLabel ?? activeTab?.label ?? '기업 관리';
+  const isCompanyManagementPage = activeTabLabel === '기업 관리';
   const canGoBack = tabHistory.index > 0;
   const canGoForward = tabHistory.index < tabHistory.stack.length - 1;
   const selectedDetailCompany = useMemo(() => {
@@ -2626,6 +2675,7 @@ export default function App() {
 
 const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDraft => ({
   name: company.name,
+  representativeName: company.representativeName,
   businessRegistrationNumber: company.businessRegistrationNumber,
   address: company.address,
   websiteUrl: company.websiteUrl,
@@ -2691,6 +2741,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
         const nextCompany: CompanyRow = {
           ...company,
           name: companyDetailEditDraft.name.trim() || company.name,
+          representativeName: companyDetailEditDraft.representativeName.trim() || company.representativeName,
           businessRegistrationNumber: companyDetailEditDraft.businessRegistrationNumber.trim() || company.businessRegistrationNumber,
           address: companyDetailEditDraft.address.trim(),
           websiteUrl: companyDetailEditDraft.websiteUrl.trim(),
@@ -2713,6 +2764,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
         return nextCompany;
       }),
     );
+    showSaveModal('저장되었습니다.');
     setHighlightedCompanyKey(nextSelectedKey);
     cancelCompanyDetailEdit();
   };
@@ -2778,6 +2830,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
               ...contact,
               companyName: isJoinedContact ? contact.companyName : contactEditDraft.companyName.trim() || contact.companyName,
               name: isJoinedContact ? contact.name : contactEditDraft.name.trim() || contact.name,
+              position: isJoinedContact ? contact.position : contactEditDraft.position.trim(),
               department: isJoinedContact ? contact.department : contactEditDraft.department.trim(),
               email: isJoinedContact ? contact.email : contactEditDraft.email.trim(),
               phone: isJoinedContact ? contact.phone : contactEditDraft.phone.trim(),
@@ -3298,6 +3351,37 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
     }, visibleDuration);
   };
 
+  const showSaveModal = (message = '저장되었습니다.') => {
+    const visibleDuration = 2200;
+
+    setSaveModalMessage(message);
+    setSaveModalMounted(true);
+    setSaveModalVisible(false);
+
+    if (saveModalFrameRef.current !== null) {
+      window.cancelAnimationFrame(saveModalFrameRef.current);
+    }
+    saveModalFrameRef.current = window.requestAnimationFrame(() => {
+      setSaveModalVisible(true);
+      saveModalFrameRef.current = null;
+    });
+
+    if (saveModalTimerRef.current !== null) {
+      window.clearTimeout(saveModalTimerRef.current);
+    }
+    saveModalTimerRef.current = window.setTimeout(() => {
+      setSaveModalVisible(false);
+      if (saveModalExitTimerRef.current !== null) {
+        window.clearTimeout(saveModalExitTimerRef.current);
+      }
+      saveModalExitTimerRef.current = window.setTimeout(() => {
+        setSaveModalMounted(false);
+        saveModalExitTimerRef.current = null;
+      }, 180);
+      saveModalTimerRef.current = null;
+    }, visibleDuration);
+  };
+
   const handleCopyCompanyAddress = async (address: string) => {
     await copyTextToClipboard(address);
   };
@@ -3595,6 +3679,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
             <colgroup>
 	              <col className="company-contacts-board__col company-contacts-board__col--check" />
 	              <col className="company-contacts-board__col company-contacts-board__col--name" />
+	              <col className="company-contacts-board__col company-contacts-board__col--position" />
 	              <col className="company-contacts-board__col company-contacts-board__col--company" />
 	              <col className="company-contacts-board__col company-contacts-board__col--email" />
               <col className="company-contacts-board__col company-contacts-board__col--phone" />
@@ -3617,6 +3702,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                   </label>
 	                </th>
 	                <th scope="col">담당자 명</th>
+	                <th scope="col">직급</th>
 	                <th scope="col">기업명 / 소속부서</th>
 	                <th scope="col">이메일</th>
                 <th scope="col">연락처</th>
@@ -3663,6 +3749,11 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                         <span className="company-contacts-board__name">{contact.name}</span>
                       </div>
 	                    </td>
+                    <td>
+                      <div className="company-contacts-board__position-cell">
+                        <span className="company-contacts-board__position">{contact.position || '-'}</span>
+                      </div>
+                    </td>
 	                    <td>
 	                      <div className="company-contacts-board__company-cell">
 	                        <button
@@ -4244,7 +4335,10 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                         <img src="/assets/company-profile-default.svg" alt="" className="company-detail__hero-logo-fallback company-card__logo-fallback" />
                       )}
                     </div>
-                    <h2 className="company-card__name">{company.name}</h2>
+                    <div className="company-card__name-block">
+                      <h2 className="company-card__name">{company.name}</h2>
+                      <div className="company-card__representative">대표자: {company.representativeName}</div>
+                    </div>
                     <div className={`company-card__menu-wrap ${openCompanyMenuKey === companyKey ? 'company-card__menu-wrap--open' : ''}`}>
                       <button
                         className="company-card__menu-button"
@@ -4493,7 +4587,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
             <div className="company-delete-dialog__content">
               <strong className="company-delete-dialog__title">삭제하시겠습니까?</strong>
               <p className="company-delete-dialog__description">
-                {pendingDeleteDialog.kind === 'company_memo' || pendingDeleteDialog.kind === 'contact_memo'
+                {pendingDeleteDialog.kind === 'contact_memo'
                   ? '선택한 메모를 삭제하시겠습니까? 삭제한 내용은 되돌릴 수 없습니다.'
                   : pendingDeleteDialog.kind === 'contact_delete'
                     ? '선택한 담당자를 삭제하시겠습니까? 삭제한 내용은 되돌릴 수 없습니다.'
@@ -4660,6 +4754,15 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
       }
       if (copyToastExitTimerRef.current !== null) {
         window.clearTimeout(copyToastExitTimerRef.current);
+      }
+      if (saveModalFrameRef.current !== null) {
+        window.cancelAnimationFrame(saveModalFrameRef.current);
+      }
+      if (saveModalTimerRef.current !== null) {
+        window.clearTimeout(saveModalTimerRef.current);
+      }
+      if (saveModalExitTimerRef.current !== null) {
+        window.clearTimeout(saveModalExitTimerRef.current);
       }
       if (statusToastFrameRef.current !== null) {
         window.cancelAnimationFrame(statusToastFrameRef.current);
@@ -5075,7 +5178,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
   const downloadCompanyExcelTemplate = () => {
     const columns = ['기업명', '사업자등록번호', '1차 업종', '세부 업종', '기업 주소', '기업 홈페이지', '피보험자 수', '매출액', '유입경로', '가입일자', '업데이트일자'];
     const sample = ['스팩스페이스', '123-45-67890', 'IT·소프트웨어', 'SaaS', '서울 강서구 마곡중앙로 59-5', 'https://example.com', '24', '5200000000', '홈페이지 문의', '2026.02.20', '2026.06.10'];
-    const csv = [columns, sample].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n');
+    const csv = [columns, sample].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -5463,6 +5566,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
       id: `contact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       companyName: draft.companyName.trim(),
       name: draft.name.trim(),
+      position: draft.position.trim(),
       status: '미가입',
       department: draft.department.trim(),
       email: draft.email.trim(),
@@ -5470,6 +5574,16 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
       participationSummary: summarizeParticipationItems(draft.participationItems),
       participationItems: draft.participationItems,
       marketingConsent: false,
+    }));
+    const nextRegisterContacts: CompanyRegisterContactDraft[] = companyContactRegisterDrafts.map((draft) => ({
+      id: draft.id,
+      companyName: (companyContactRegisterLockedCompanyName || draft.companyName).trim(),
+      name: draft.name.trim(),
+      position: draft.position.trim(),
+      department: draft.department.trim(),
+      email: draft.email.trim(),
+      phone: draft.phone.trim(),
+      participationItems: [...draft.participationItems],
     }));
 
     if (companyContactRegisterMode === 'company_register') {
@@ -5483,10 +5597,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
           draft.id === companyContactRegisterTargetCompanyRegisterDraftId
             ? {
                 ...draft,
-                contacts: nextContacts.map((contact) => ({
-                  ...contact,
-                  companyName: companyContactRegisterLockedCompanyName || contact.companyName,
-                })),
+                contacts: nextRegisterContacts,
               }
             : draft,
         ),
@@ -5909,20 +6020,28 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
 
           <nav className="sidebar-nav" aria-label="주요 메뉴">
             {sidebarItems.map((item) => (
-              <SidebarMenuGroup
-                key={item.label}
-                item={item}
-                open={Boolean(openSections[item.label])}
-                activeLabel={activeTabLabel}
-                onToggle={() =>
-                  setOpenSections((current) => ({
-                    ...current,
-                    [item.label]: !current[item.label],
-                  }))
-                }
-                collapsed={isSidebarCollapsed}
-                onOpenPage={openSidebarTab}
-              />
+              <div key={item.label} className="sidebar-nav__entry">
+                {item.label === '회원 관리' ? (
+                  <>
+                    <div className="sidebar-nav__divider" aria-hidden="true" />
+                    <div className="sidebar-nav__section-label">DB 관리</div>
+                  </>
+                ) : null}
+                {item.label === '웹사이트 관리' ? <div className="sidebar-nav__divider" aria-hidden="true" /> : null}
+                <SidebarMenuGroup
+                  item={item}
+                  open={Boolean(openSections[item.label])}
+                  activeLabel={activeTabLabel}
+                  onToggle={() =>
+                    setOpenSections((current) => ({
+                      ...current,
+                      [item.label]: !current[item.label],
+                    }))
+                  }
+                  collapsed={isSidebarCollapsed}
+                  onOpenPage={openSidebarTab}
+                />
+              </div>
             ))}
           </nav>
 
@@ -6008,7 +6127,9 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
           </div>
         </div>
 
-        {!isCompanyDetailView ? (
+        {isCompanyManagementPage ? (
+          <>
+            {!isCompanyDetailView ? (
           <section className="title-section" aria-label="페이지 제목">
             <div className="title-section__tabs" role="tablist" aria-label="주요 보기 전환">
               <button
@@ -6357,6 +6478,23 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
 
                           <div className="company-detail__summary-row">
                             <div className="company-detail__summary-item">
+                              <div className="company-detail__summary-label">대표자명</div>
+                              <div className="company-detail__summary-value-box">
+                                {isCompanyDetailEditing && companyDetailEditDraft ? (
+                                  <input
+                                    className="company-detail__summary-input"
+                                    value={companyDetailEditDraft.representativeName}
+                                    onChange={(event) => updateCompanyDetailEditDraft('representativeName', event.target.value)}
+                                  />
+                                ) : (
+                                  <div className="company-detail__summary-value">{selectedDetailCompany.representativeName}</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="company-detail__summary-row">
+                            <div className="company-detail__summary-item">
                               <div className="company-detail__summary-label">기업 주소</div>
                               <div className="company-detail__summary-value-box">
                                 {isCompanyDetailEditing && companyDetailEditDraft ? (
@@ -6607,7 +6745,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                                   <AssetIcon src="/assets/message.svg" className="company-detail__toolbar-message-icon" />
                                   <span>문자 보내기</span>
                                 </button>
-                                <button type="button" className="company-detail__toolbar-message" onClick={openCompanyContactRegisterDialog}>
+                                <button type="button" className="company-detail__toolbar-message" onClick={() => openCompanyContactRegisterDialog()}>
                                   <AssetIcon src="/assets/plus.svg" className="company-detail__toolbar-message-icon" />
                                   <span>담당자 추가</span>
                                 </button>
@@ -6765,6 +6903,10 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
 
                                     <div className="company-detail__contact-body">
                                       <div className="company-detail__contact-info-list">
+                                        <div className="company-detail__contact-info-row">
+                                          <div className="company-detail__contact-label">직급</div>
+                                          <div className="company-detail__contact-value">{contact.position || '미등록'}</div>
+                                        </div>
                                         <div className="company-detail__contact-info-row">
                                           <div className="company-detail__contact-label">소속 부서</div>
                                           <div className="company-detail__contact-value">{contact.department}</div>
@@ -7152,6 +7294,10 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
         ) : (
           companyContactsListContent
         )}
+          </>
+        ) : (
+          <BlankPage title={activeTabLabel} description="이 메뉴는 별도 페이지로 분리해 둘 수 있습니다." />
+        )}
         {copyToastMounted ? (
           <div className={`copy-toast ${copyToastVisible ? 'copy-toast--visible' : 'copy-toast--hidden'}`} role="status" aria-live="polite">
             복사되었습니다.
@@ -7164,6 +7310,15 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
             aria-live="polite"
           >
             {statusToastMessage}
+          </div>
+        ) : null}
+        {saveModalMounted ? (
+          <div
+            className={`copy-toast save-modal ${saveModalVisible ? 'copy-toast--visible' : 'copy-toast--hidden'}`}
+            role="status"
+            aria-live="polite"
+          >
+            {saveModalMessage}
           </div>
         ) : null}
       </main>
@@ -7416,6 +7571,19 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
 	                    </label>
 	                  </div>
 
+	                  <label className="company-register-dialog__field company-register-dialog__field--wide">
+	                    <span className="company-register-dialog__label">대표자명</span>
+	                    <input
+	                      type="text"
+	                      value={activeCompanyRegisterDraft?.representativeName ?? ''}
+	                      onChange={(event) => {
+	                        if (!activeCompanyRegisterDraft) return;
+	                        updateCompanyRegisterDraft(activeCompanyRegisterDraft.id, 'representativeName', event.target.value);
+	                      }}
+	                      placeholder="대표자명을 입력하세요"
+	                    />
+	                  </label>
+
 	                  <div
 	                    className={`company-register-dialog__field-row company-register-dialog__field-row--company company-register-dialog__industry-values ${
 	                      openCompanyRegisterIndustryPickerDraftId === activeCompanyRegisterDraft?.id ? 'is-open' : ''
@@ -7543,7 +7711,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
 	                                    if (isPrimaryAll) {
 	                                      const matchedIndustry =
 	                                        industryOptions.find((option) => option.primary === activeCompanyRegisterPrimaryOption.primary);
-	                                      const nextDetailIndustries = isSelected ? [] : matchedIndustry?.details ?? [];
+	                                      const nextDetailIndustries = isSelected ? [] : [...(matchedIndustry?.details ?? [])];
 
 	                                      setCompanyRegisterDrafts((current) =>
 	                                        current.map((draft) =>
@@ -8138,6 +8306,18 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                       ) : null}
                     </label>
 
+                    <label className="company-register-dialog__field">
+                      <span className="company-register-dialog__label">직급</span>
+                      <input
+                        type="text"
+                        value={activeCompanyContactRegisterDraft.position}
+                        onChange={(event) =>
+                          updateCompanyContactRegisterDraft(activeCompanyContactRegisterDraft.id, 'position', event.target.value)
+                        }
+                        placeholder="예: 팀장"
+                      />
+                    </label>
+
                     <div className="company-register-dialog__field-row">
                       <div className="company-register-dialog__field">
                         <span className="company-register-dialog__label">기업</span>
@@ -8158,7 +8338,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                             <button
                               type="button"
                               className="company-register-dialog__picker-trigger"
-                              onClick={(event) => toggleCompanyContactRegisterCompanyPicker(activeCompanyContactRegisterDraft.id, event.currentTarget)}
+                              onClick={() => toggleCompanyContactRegisterCompanyPicker(activeCompanyContactRegisterDraft.id)}
                             >
                               <span>{activeCompanyContactRegisterDraft.companyName || '기업을 선택하세요'}</span>
                               <ToggleArrowIcon open={openCompanyContactRegisterCompanyPickerId === activeCompanyContactRegisterDraft.id} />
@@ -8291,7 +8471,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                         <button
                           type="button"
                           className="company-register-dialog__picker-trigger"
-                          onClick={(event) => toggleCompanyContactRegisterCoursePicker(activeCompanyContactRegisterDraft.id, event.currentTarget)}
+                          onClick={() => toggleCompanyContactRegisterCoursePicker(activeCompanyContactRegisterDraft.id)}
                         >
                           <span>
                             {(
@@ -8897,6 +9077,16 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                 />
               </label>
               <label className="sidebar-profile-dialog__field">
+                <span className="sidebar-profile-dialog__label">직급</span>
+                <input
+                  type="text"
+                  value={contactEditDraft.position}
+                  onChange={(event) => handleContactEditDraftChange('position', event.target.value)}
+                  placeholder="직급을 입력하세요"
+                  disabled={isJoinedContact}
+                />
+              </label>
+              <label className="sidebar-profile-dialog__field">
                 <span className="sidebar-profile-dialog__label">부서</span>
                 <input
                   type="text"
@@ -9152,7 +9342,7 @@ function SidebarMenuGroup({
 
       {hasChildren && open && !collapsed ? (
         <div className="sidebar-group__children">
-          {item.children.map((child) => (
+          {(item.children ?? []).map((child) => (
             <SidebarMenuLeaf key={child.label} item={child} activeLabel={activeLabel} onOpenPage={onOpenPage} parentPath={[item.label]} />
           ))}
         </div>
@@ -9190,7 +9380,7 @@ function SidebarMenuLeaf({
       </button>
       {hasChildren ? (
         <div className="sidebar-group__children sidebar-group__children--nested">
-          {item.children.map((child) => (
+          {(item.children ?? []).map((child) => (
             <SidebarMenuLeaf key={child.label} item={child} activeLabel={activeLabel} onOpenPage={onOpenPage} parentPath={path} />
           ))}
         </div>
@@ -9257,14 +9447,16 @@ function SidebarUtilityChildrenMenu({
   onOpenPage,
   onCloseServiceMenu,
 }: {
-  item: SidebarUtilityItem & { children: SidebarUtilityItem[] };
+  item: SidebarUtilityItem;
   onOpenPage: (path: string[], label: string, iconSrc: string) => void;
   onCloseServiceMenu: () => void;
 }) {
+  const children = item.children ?? [];
+
   return (
     <div className="crm-sidebar__utility-children" role="menu" aria-label={`${item.label} 메뉴`}>
       <div className="crm-sidebar__utility-tooltip-title">{item.label}</div>
-      {item.children.map((child) => (
+      {children.map((child) => (
         <button
           key={child.label}
           type="button"
@@ -9502,7 +9694,7 @@ function ToolbarMenuDropdown({
     >
       <button
         type="button"
-        className={`select-chip ${value ? 'select-chip--active' : ''}`}
+        className={`select-chip toolbar-menu-dropdown__trigger ${value ? 'select-chip--active' : ''}`}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={onToggle}

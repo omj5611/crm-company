@@ -23,6 +23,7 @@ type UploadedAsset = {
 type Company = {
   name: string;
   address: string;
+  representativeName: string;
   website: string;
   businessNo: string;
   employeeBand: string;
@@ -140,6 +141,7 @@ export function CompanyDetailPage({
   }> = [
     { label: '기업명', value: company.name, span: 2 },
     { label: '사업자등록번호', value: company.businessNo, copyable: true, span: 2 },
+    { label: '대표자명', value: company.representativeName, span: 2 },
     { label: '본사 주소', value: company.address, copyable: true, span: 2 },
     { label: '피보험자 수', value: company.employeeBand },
     { label: '매출액', value: `${company.revenue.toLocaleString('ko-KR')}원` },
@@ -372,6 +374,7 @@ export function CompanyDetailPage({
                         </div>
                         <div className="contact-card__body">
                           {[
+                            { label: '직급', value: contact.role || '미등록' },
                             { label: '부서', value: contact.department || '미등록' },
                             { label: '담당자 연락처', value: contact.phone },
                             { label: '담당자 이메일', value: contact.email },

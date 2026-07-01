@@ -53,11 +53,11 @@ export function Sidebar({
         <nav className="menu">
           <SidebarSection
             icon={<MenuIcon src={EDU_ICON_SRC} className="sidebar-menu__icon" />}
-            label="교육과정 관리"
+            label="사업 관리"
             open={sections.curriculum}
             onToggle={() => onToggleSection('curriculum')}
-            onOpenPage={() => onOpenPage('교육과정 관리')}
-            highlighted={['교육과정 관리', '전체 교육과정 리스트', '교육과정 캘린더', '상세페이지 FAQ', '메인 FAQ', '사업페이지 FAQ', 'KDT', '중소기업인재키움'].some((item) =>
+            onOpenPage={() => onOpenPage('사업 관리')}
+            highlighted={['사업 관리', '전체 교육과정 리스트', '교육과정 캘린더', '상세페이지 FAQ', '메인 FAQ', '사업페이지 FAQ', 'KDT', '중소기업인재키움'].some((item) =>
               item.toLowerCase().includes(query),
             )}
             items={[
