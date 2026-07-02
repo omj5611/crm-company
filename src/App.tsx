@@ -13,6 +13,26 @@ import {
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { BlankPage } from './components/BlankPage';
+import { BusinessManagementPage } from './components/BusinessManagementPage';
+import { DropdownSelect } from './components/DropdownSelect';
+import { DetailMemoPanel } from './components/DetailMemoPanel';
+import { LoginPage } from './components/LoginPage';
+import { NoticeManagementPage } from './components/NoticeManagementPage';
+import { MemberManagementPage } from './components/MemberManagementPage';
+import { InstructorDetailPage } from './components/InstructorDetailPage';
+import { InstructorManagementPage, type InstructorRow } from './components/InstructorManagementPage';
+import { InstructorRegistrationDialogs } from './components/InstructorRegistrationDialogs';
+import { TagDialog } from './components/TagDialog';
+import { TagToggleAction } from './components/TagToggleAction';
+import { getSupabaseClient, isSupabaseConfigured } from './lib/supabase';
+import {
+  getWorkspaceFromBrand,
+  isAllowedLoginRole,
+  loadAuthUserProfile,
+  resolveLoginErrorMessage,
+  signInWithEmailPassword,
+  type AuthUserProfile,
+} from './services/auth';
 
 type SidebarItem = {
   label: string;
@@ -21,10 +41,7 @@ type SidebarItem = {
   children?: SidebarItem[];
 };
 
-type FavoriteCourse = {
-  label: string;
-  featured?: boolean;
-};
+type InstructorTagState = Record<string, boolean>;
 
 type CompanyRow = {
   name: string;
@@ -106,7 +123,7 @@ type IndustryOption = {
   details: string[];
 };
 
-type SearchResultKind = '메뉴' | '필터' | '기업' | '즐겨찾기' | '작업';
+type SearchResultKind = '메뉴' | '필터' | '기업' | '작업';
 
 type SearchResult = {
   id: string;
@@ -126,6 +143,8 @@ type OpenTab = {
   sidebarLabel?: string;
   companyKey?: string;
 };
+
+type AppAuthProfile = AuthUserProfile;
 
 type CompanyDetailTab = '기업 정보' | '담당자' | '참여 이력' | '보낸 문자' | '파일';
 
@@ -277,18 +296,18 @@ type SidebarUtilityItem = {
   label: string;
   iconSrc: string;
   path?: string[];
+  href?: string;
   children?: SidebarUtilityItem[];
 };
 
 const sidebarItems: SidebarItem[] = [
   {
+    label: '공지사항',
+    iconSrc: '/assets/crm-notice.svg',
+  },
+  {
     label: '사업 관리',
     iconSrc: '/assets/edu.svg',
-    children: [
-      { label: '전체 교육과정 리스트', iconSrc: '/assets/edu.svg' },
-      { label: '교육과정 캘린더', iconSrc: '/assets/edu.svg' },
-      { label: '상세페이지 FAQ 관리', iconSrc: '/assets/edu.svg' },
-    ],
   },
   {
     label: '회원 관리',
@@ -301,7 +320,7 @@ const sidebarItems: SidebarItem[] = [
     ],
   },
   { label: '기업 관리', iconSrc: '/assets/company.svg', active: true },
-  { label: '강사 관리', iconSrc: '/assets/lecture.svg' },
+  { label: '강사/멘토 관리', iconSrc: '/assets/lecture.svg' },
   {
     label: '웹사이트 관리',
     iconSrc: '/assets/website.svg',
@@ -330,10 +349,192 @@ const sidebarItems: SidebarItem[] = [
   },
 ];
 
-const favoriteCourses: FavoriteCourse[] = [
-  { label: 'AI로 완성하는 SNS 마케팅 프로젝트' },
-  { label: 'AI로 완성하는 SNS 마케팅 프로젝트' },
-  { label: 'AI로 완성하는 SNS 마케팅 프로젝트', featured: true },
+const initialInstructorRows: InstructorRow[] = [
+  {
+    id: 'instructor-1',
+    name: '김지은',
+    birthDate: '1987.03.14',
+    phone: '010-2456-9901',
+    email: 'jieun.kim@trainer.com',
+    organization: '스팩스페이스',
+    nscEnrolled: true,
+    lectureRegions: ['서울', '경기'],
+    lectureFields: ['UX/UI', '서비스 기획'],
+    resumeUrl: 'https://example.com/resume/jieun-kim',
+    resumeFiles: [
+      { id: 'resume-1', name: '김지은_이력서.pdf', url: 'https://example.com/files/jieun-kim-resume.pdf' },
+      { id: 'resume-2', name: '김지은_포트폴리오.pdf', url: 'https://example.com/files/jieun-kim-portfolio.pdf' },
+    ],
+    finalEducation: '석사',
+    ncsField: '문화콘텐츠기획',
+    participationItems: ['[미래내일일경험] UXUI 인턴형 프로그램 9기', '[KDT] 디지털 서비스 UX 리서치 과정'],
+    educations: [
+      {
+        id: 'education-1',
+        schoolName: '홍익대학교',
+        department: '디자인학부',
+        major: '서비스디자인',
+        degree: '석사',
+        period: '2011.03 - 2017.02',
+      },
+    ],
+    careers: [
+      { id: 'career-1', roleName: 'UX 컨설턴트', workplace: '스팩스페이스', period: '2022.01 - 현재' },
+      { id: 'career-2', roleName: '서비스 기획 리드', workplace: '넥스트웨이브', period: '2018.03 - 2021.12' },
+    ],
+    certificateFiles: [{ id: 'certificate-1', name: '김지은_학위증명서.pdf', url: 'https://example.com/files/jieun-degree.pdf' }],
+  },
+  {
+    id: 'instructor-2',
+    name: '박서윤',
+    birthDate: '1990.11.02',
+    phone: '010-9921-4300',
+    email: 'seoyun.park@trainer.com',
+    organization: '메타플로우',
+    nscEnrolled: false,
+    lectureRegions: ['부산', '울산'],
+    lectureFields: ['데이터 분석', 'AI 활용'],
+    resumeUrl: 'https://example.com/resume/seoyun-park',
+    resumeFiles: [{ id: 'resume-3', name: '박서윤_강사이력서.pdf', url: 'https://example.com/files/seoyun-park-resume.pdf' }],
+    finalEducation: '학사',
+    participationItems: ['[미래내일일경험] 데이터 분석 인턴형 프로그램 4기', 'AI로 완성하는 SNS 마케팅 프로젝트'],
+    educations: [
+      {
+        id: 'education-2',
+        schoolName: '숙명여자대학교',
+        department: '통계학과',
+        major: '데이터사이언스',
+        degree: '학사',
+        period: '2009.03 - 2013.02',
+      },
+    ],
+    careers: [
+      { id: 'career-3', roleName: '데이터 분석 강사', workplace: '메타플로우', period: '2021.06 - 현재' },
+      { id: 'career-4', roleName: '마케팅 데이터 애널리스트', workplace: '브랜드업', period: '2016.04 - 2021.05' },
+    ],
+  },
+  {
+    id: 'instructor-3',
+    name: '이도현',
+    birthDate: '1984.07.29',
+    phone: '010-5524-8102',
+    email: 'dohyun.lee@trainer.com',
+    organization: '브릿지커머스',
+    nscEnrolled: true,
+    lectureRegions: ['대전', '충청'],
+    lectureFields: ['마케팅', '콘텐츠 전략'],
+    resumeUrl: 'https://example.com/resume/dohyun-lee',
+    resumeFiles: [{ id: 'resume-4', name: '이도현_강의경력서.pdf', url: 'https://example.com/files/dohyun-lee-career.pdf' }],
+    finalEducation: '학사',
+    ncsField: '광고콘텐츠제작',
+    participationItems: ['AI로 완성하는 SNS 마케팅 프로젝트'],
+    educations: [
+      {
+        id: 'education-3',
+        schoolName: '한양대학교',
+        department: '신문방송학과',
+        major: '미디어커뮤니케이션',
+        degree: '학사',
+        period: '2003.03 - 2007.02',
+      },
+    ],
+    careers: [
+      { id: 'career-5', roleName: '콘텐츠 마케팅 디렉터', workplace: '브릿지커머스', period: '2019.02 - 현재' },
+      { id: 'career-6', roleName: '브랜드 마케터', workplace: '이노미디어', period: '2012.01 - 2018.12' },
+    ],
+  },
+];
+
+const initialMentorRows: InstructorRow[] = [
+  {
+    id: 'mentor-1',
+    name: '최유진',
+    birthDate: '1991.06.18',
+    phone: '010-1188-4402',
+    email: 'yujin.choi@mentorlab.kr',
+    organization: '멘토랩',
+    nscEnrolled: true,
+    lectureRegions: ['서울', '경기'],
+    lectureFields: ['서비스 기획', '프로젝트 코칭'],
+    resumeUrl: 'https://example.com/resume/yujin-choi',
+    resumeFiles: [{ id: 'mentor-resume-1', name: '최유진_멘토이력서.pdf', url: 'https://example.com/files/yujin-choi-resume.pdf' }],
+    finalEducation: '석사',
+    ncsField: '서비스기획',
+    participationItems: ['[KDT] 디지털 서비스 UX 리서치 과정', '새싹 AI 서비스 기획'],
+    educations: [
+      {
+        id: 'mentor-education-1',
+        schoolName: '이화여자대학교',
+        department: '경영학과',
+        major: '서비스경영',
+        degree: '석사',
+        period: '2010.03 - 2014.02',
+      },
+    ],
+    careers: [
+      { id: 'mentor-career-1', roleName: '프로덕트 멘토', workplace: '멘토랩', period: '2022.04 - 현재' },
+      { id: 'mentor-career-2', roleName: '서비스 기획자', workplace: '오픈워크', period: '2016.03 - 2022.03' },
+    ],
+  },
+  {
+    id: 'mentor-2',
+    name: '한태훈',
+    birthDate: '1988.12.04',
+    phone: '010-6634-7710',
+    email: 'taehoon.han@mentorlab.kr',
+    organization: '리드웨이',
+    nscEnrolled: false,
+    lectureRegions: ['부산', '울산', '대구'],
+    lectureFields: ['데이터 분석', 'AI 활용'],
+    resumeUrl: 'https://example.com/resume/taehoon-han',
+    resumeFiles: [{ id: 'mentor-resume-2', name: '한태훈_멘토경력서.pdf', url: 'https://example.com/files/taehoon-han-resume.pdf' }],
+    finalEducation: '학사',
+    participationItems: ['[미래내일일경험] 데이터 분석 인턴형 프로그램 4기'],
+    educations: [
+      {
+        id: 'mentor-education-2',
+        schoolName: '부산대학교',
+        department: '통계학과',
+        major: '데이터사이언스',
+        degree: '학사',
+        period: '2007.03 - 2013.02',
+      },
+    ],
+    careers: [
+      { id: 'mentor-career-3', roleName: '데이터 전략 멘토', workplace: '리드웨이', period: '2021.08 - 현재' },
+      { id: 'mentor-career-4', roleName: 'BI 분석가', workplace: '인사이트랩', period: '2015.01 - 2021.07' },
+    ],
+  },
+  {
+    id: 'mentor-3',
+    name: '정민아',
+    birthDate: '1993.09.23',
+    phone: '010-4099-2201',
+    email: 'mina.jung@mentorlab.kr',
+    organization: '커리어브릿지',
+    nscEnrolled: true,
+    lectureRegions: ['서울', '인천'],
+    lectureFields: ['운영', '커리어 코칭'],
+    resumeUrl: 'https://example.com/resume/mina-jung',
+    resumeFiles: [{ id: 'mentor-resume-3', name: '정민아_멘토프로필.pdf', url: 'https://example.com/files/mina-jung-resume.pdf' }],
+    finalEducation: '학사',
+    ncsField: '직업상담',
+    participationItems: ['중소기업 운영 실무', '현장 적응 워크숍'],
+    educations: [
+      {
+        id: 'mentor-education-3',
+        schoolName: '서울시립대학교',
+        department: '행정학과',
+        major: '공공정책',
+        degree: '학사',
+        period: '2012.03 - 2016.02',
+      },
+    ],
+    careers: [
+      { id: 'mentor-career-5', roleName: '커리어 코치', workplace: '커리어브릿지', period: '2020.02 - 현재' },
+      { id: 'mentor-career-6', roleName: '프로그램 운영자', workplace: '스나이퍼팩토리', period: '2017.05 - 2020.01' },
+    ],
+  },
 ];
 
 const contactParticipationCourseOptions = [
@@ -351,11 +552,15 @@ const sidebarQuickLinks: SidebarUtilityItem[] = [
     label: '서비스 바로가기',
     iconSrc: '/assets/service.svg',
     children: [
-      { label: '캐치폼', iconSrc: '/assets/catchform.png', path: ['서비스 바로가기', '캐치폼'] },
-      { label: 'SFAC 메일 빌더', iconSrc: '/assets/mailbuilder.png', path: ['서비스 바로가기', 'SFAC 메일 빌더'] },
-      { label: '알리고', iconSrc: '/assets/alligo.png', path: ['서비스 바로가기', '알리고'] },
-      { label: '채널톡', iconSrc: '/assets/channeltalk.png', path: ['서비스 바로가기', '채널톡'] },
-      { label: '디자인 요청 노션 페이지', iconSrc: '/assets/notion.png', path: ['서비스 바로가기', '디자인 요청 노션 페이지'] },
+      { label: '캐치폼', iconSrc: '/assets/catchform.png', href: 'https://catchform.vercel.app/admin' },
+      { label: 'SFAC 메일 빌더', iconSrc: '/assets/mailbuilder.png', href: 'https://sfac-mail-builder.vercel.app/' },
+      { label: '알리고', iconSrc: '/assets/alligo.png', href: 'https://smartsms.aligo.in/' },
+      { label: '채널톡', iconSrc: '/assets/channeltalk.png', href: 'https://channel.io/ko' },
+      {
+        label: '디자인 요청 페이지',
+        iconSrc: '/assets/notion.png',
+        href: 'https://www.notion.so/sniperfactory/2a94c1f5429d80718dadd59f173c5735?source=copy_link',
+      },
     ],
   },
   { label: '사용가이드', iconSrc: '/assets/guide.svg', path: ['사용가이드'] },
@@ -662,7 +867,7 @@ const regionOptions = [
 type FilterKey = (typeof filterGroups)[number]['key'];
 type ContactFilterKey = 'contactCompany' | 'contactCourse' | 'contactStatus' | 'companyCourse';
 type FilterSelectionState = Record<FilterKey, string>;
-const searchResultKinds: SearchResultKind[] = ['기업', '메뉴', '필터', '즐겨찾기', '작업'];
+const searchResultKinds: SearchResultKind[] = ['기업', '메뉴', '필터', '작업'];
 const makeTabId = (path: string[]) => path.join('>');
 const insuredBandOptions = ['5인 이하', '6인 이상-10인 이하', '11인 이상 - 20인 이하', '21인 이상'] as const;
 const directInsuredLabel = '직접 설정';
@@ -1304,8 +1509,13 @@ export default function App() {
     revenueBand: '전체',
     status: '전체',
   };
+  const [authProfile, setAuthProfile] = useState<AppAuthProfile | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+  const [loginErrorMessage, setLoginErrorMessage] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState<'스팩' | '인사'>('스팩');
+  const [noticeUnreadCount, setNoticeUnreadCount] = useState(0);
   const [activeCompanyView, setActiveCompanyView] = useState<'기업' | '기업 담당자'>('기업');
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [isCompanyRegisterDialogOpen, setIsCompanyRegisterDialogOpen] = useState(false);
@@ -1334,6 +1544,19 @@ export default function App() {
   const [openContactMenuId, setOpenContactMenuId] = useState<string | null>(null);
   const [selectedCompanyKeys, setSelectedCompanyKeys] = useState<string[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [instructorRows, setInstructorRows] = useState<InstructorRow[]>(() => initialInstructorRows);
+  const [mentorRows, setMentorRows] = useState<InstructorRow[]>(() => initialMentorRows);
+  const [taggedInstructorIds, setTaggedInstructorIds] = useState<InstructorTagState>({
+    'instructor-1': true,
+  });
+  const [instructorTagNotesById, setInstructorTagNotesById] = useState<Record<string, string>>({});
+  const [isInstructorTagDialogOpen, setIsInstructorTagDialogOpen] = useState(false);
+  const [activeInstructorTagId, setActiveInstructorTagId] = useState<string | null>(null);
+  const [instructorTagDialogMode, setInstructorTagDialogMode] = useState<'edit' | 'remove'>('edit');
+  const [instructorTagMemoDraft, setInstructorTagMemoDraft] = useState('');
+  const [selectedInstructorId, setSelectedInstructorId] = useState<string | null>(null);
+  const [isInstructorRegisterDialogOpen, setIsInstructorRegisterDialogOpen] = useState(false);
+  const [isInstructorExcelRegisterDialogOpen, setIsInstructorExcelRegisterDialogOpen] = useState(false);
   const [copyToastMounted, setCopyToastMounted] = useState(false);
   const [copyToastVisible, setCopyToastVisible] = useState(false);
   const [saveModalMounted, setSaveModalMounted] = useState(false);
@@ -1544,17 +1767,6 @@ export default function App() {
       }
     });
 
-    favoriteCourses.forEach((course, index) => {
-      if (matchesQuery(course.label)) {
-        results.push({
-          id: `favorite-${index}`,
-          label: course.label,
-          kind: '즐겨찾기',
-          meta: '즐겨찾는 교육과정',
-        });
-      }
-    });
-
     flattenSidebarUtilityItems(sidebarQuickLinks).forEach((item) => {
       if (!item.path) return;
       if (matchesQuery(item.label)) {
@@ -1590,7 +1802,7 @@ export default function App() {
     return searchResultKinds.reduce<Record<SearchResultKind, SearchResult[]>>((acc, kind) => {
       acc[kind] = searchResults.filter((result) => result.kind === kind);
       return acc;
-    }, { 메뉴: [], 필터: [], 기업: [], 즐겨찾기: [], 작업: [] });
+    }, { 메뉴: [], 필터: [], 기업: [], 작업: [] });
   }, [searchResults]);
   const companyParticipationItemsByName = useMemo(
     () => collectCompanyParticipationItems(companyDetailContacts),
@@ -1672,9 +1884,84 @@ export default function App() {
     revenueMax,
   ]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoginErrorMessage('Supabase 환경변수가 설정되지 않았습니다.');
+      setIsAuthLoading(false);
+      return;
+    }
+
+    const client = getSupabaseClient();
+    let cancelled = false;
+
+    const syncSession = async (sessionUserId: string | null) => {
+      if (!sessionUserId) {
+        if (cancelled) return;
+        setAuthProfile(null);
+        setIsAuthLoading(false);
+        return;
+      }
+
+      try {
+        const profile = await loadAuthUserProfile(sessionUserId);
+        if (cancelled) return;
+
+        if (!profile) {
+          await client.auth.signOut();
+          setAuthProfile(null);
+          setLoginErrorMessage('로그인한 계정의 사용자 정보를 찾을 수 없습니다.');
+          return;
+        }
+
+        if (!isAllowedLoginRole(profile.role)) {
+          await client.auth.signOut();
+          setAuthProfile(null);
+          setLoginErrorMessage('MASTER 또는 ADMIN 계정만 로그인할 수 있습니다.');
+          return;
+        }
+
+        setAuthProfile(profile);
+        setActiveWorkspace(getWorkspaceFromBrand(profile.brand));
+        setLoginErrorMessage(null);
+      } catch (error) {
+        if (cancelled) return;
+        setAuthProfile(null);
+        setLoginErrorMessage(resolveLoginErrorMessage(error));
+      } finally {
+        if (!cancelled) {
+          setIsAuthLoading(false);
+        }
+      }
+    };
+
+    void client.auth.getSession().then(({ data }) => {
+      void syncSession(data.session?.user.id ?? null);
+    });
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, session) => {
+      void syncSession(session?.user.id ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) ?? openTabs[0];
   const activeTabLabel = activeTab?.sidebarLabel ?? activeTab?.label ?? '기업 관리';
+  const isNoticePage = activeTabLabel === '공지사항';
+  const isBusinessManagementPage = activeTabLabel === '사업 관리';
+  const isMemberManagementPage = activeTabLabel === '가입 회원 리스트';
   const isCompanyManagementPage = activeTabLabel === '기업 관리';
+  const isInstructorManagementPage = activeTabLabel === '강사 관리' || activeTabLabel === '강사/멘토 관리';
+  const selectedInstructor = useMemo(
+    () => [...instructorRows, ...mentorRows].find((instructor) => instructor.id === selectedInstructorId) ?? null,
+    [instructorRows, mentorRows, selectedInstructorId],
+  );
+  const isInstructorDetailView = isInstructorManagementPage && Boolean(selectedInstructor);
   const canGoBack = tabHistory.index > 0;
   const canGoForward = tabHistory.index < tabHistory.stack.length - 1;
   const selectedDetailCompany = useMemo(() => {
@@ -1688,6 +1975,7 @@ export default function App() {
     return matched;
   }, [highlightedCompanyKey, visibleCompanyRows, companyRows]);
   const isCompanyDetailView = activeCompanyView === '기업' && Boolean(selectedDetailCompany);
+  const isAuthenticated = Boolean(authProfile);
   const defaultCompanyMemoEntries = useMemo<CompanyMemoEntry[]>(
     () => [
       {
@@ -1713,6 +2001,9 @@ export default function App() {
     : defaultCompanyMemoEntries;
   const orderedCompanyMemoEntries = useMemo(() => [...activeCompanyMemoEntries].reverse(), [activeCompanyMemoEntries]);
   const activeCompanyMemoDraft = selectedDetailCompanyKey ? companyMemoDraftByKey[selectedDetailCompanyKey] ?? '' : '';
+  const profileDisplayName = authProfile?.name ?? '로그인 사용자';
+  const profileDisplayRole = formatAuthRoleLabel(authProfile?.role);
+  const isMasterAccount = authProfile?.role === 'MASTER';
   const activeCompanyMemoEditTarget =
     activeCompanyMemoEditContext?.companyKey === selectedDetailCompanyKey
       ? activeCompanyMemoEntries.find((memo) => memo.id === activeCompanyMemoEditContext.memoId) ?? null
@@ -1729,11 +2020,17 @@ export default function App() {
       Array.from(
         new Set([
           ...contactParticipationCourseOptions,
-          ...favoriteCourses.map((course) => course.label),
           ...companyDetailContacts.flatMap((contact) => contact.participationItems ?? []),
         ]),
       ),
     [companyDetailContacts],
+  );
+  const instructorMemoCountsById = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(instructorTagNotesById).map(([instructorId, memo]) => [instructorId, memo.trim() ? 1 : 0]),
+      ),
+    [instructorTagNotesById],
   );
   const companyRegisterCompanyOptions = useMemo(
     () => Array.from(new Set([...companyRows.map((company) => company.name), ...companyRegisterDrafts.map((draft) => draft.name).filter(Boolean)])),
@@ -3351,6 +3648,108 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
     }, visibleDuration);
   };
 
+  const toggleInstructorNscEnrollment = (instructorId: string) => {
+    setInstructorRows((current) =>
+      current.map((instructor) =>
+        instructor.id === instructorId ? { ...instructor, nscEnrolled: !instructor.nscEnrolled } : instructor,
+      ),
+    );
+  };
+
+  const openInstructorRegisterDialog = () => {
+    setIsInstructorRegisterDialogOpen(true);
+  };
+
+  const closeInstructorRegisterDialog = () => {
+    setIsInstructorRegisterDialogOpen(false);
+  };
+
+  const openInstructorExcelRegisterDialog = () => {
+    setIsInstructorExcelRegisterDialogOpen(true);
+  };
+
+  const closeInstructorExcelRegisterDialog = () => {
+    setIsInstructorExcelRegisterDialogOpen(false);
+  };
+
+  const openInstructorDetail = (instructorId: string) => {
+    setSelectedInstructorId(instructorId);
+  };
+
+  const closeInstructorDetail = () => {
+    setSelectedInstructorId(null);
+  };
+
+  const openInstructorTagDialog = (instructorId: string) => {
+    setInstructorTagDialogMode('edit');
+    setActiveInstructorTagId(instructorId);
+    setInstructorTagMemoDraft(instructorTagNotesById[instructorId] ?? '');
+    setIsInstructorTagDialogOpen(true);
+  };
+
+  const openInstructorTagRemovalDialog = (instructorId: string) => {
+    setInstructorTagDialogMode('remove');
+    setActiveInstructorTagId(instructorId);
+    setInstructorTagMemoDraft(instructorTagNotesById[instructorId] ?? '');
+    setIsInstructorTagDialogOpen(true);
+  };
+
+  const closeInstructorTagDialog = () => {
+    setIsInstructorTagDialogOpen(false);
+    setActiveInstructorTagId(null);
+    setInstructorTagMemoDraft('');
+  };
+
+  const saveInstructorTagMemo = () => {
+    if (!activeInstructorTagId) return;
+
+    const nextMemo = instructorTagMemoDraft.trim();
+    setInstructorTagNotesById((current) => {
+      const next = { ...current };
+      if (nextMemo) next[activeInstructorTagId] = nextMemo;
+      else delete next[activeInstructorTagId];
+      return next;
+    });
+    setTaggedInstructorIds((current) => ({
+      ...current,
+      [activeInstructorTagId]: true,
+    }));
+    showStatusToast('강사 태그를 추가했습니다.');
+    closeInstructorTagDialog();
+  };
+
+  const confirmInstructorTagRemoval = () => {
+    if (!activeInstructorTagId) return;
+
+    setTaggedInstructorIds((current) => ({
+      ...current,
+      [activeInstructorTagId]: false,
+    }));
+    setInstructorTagNotesById((current) => {
+      const next = { ...current };
+      delete next[activeInstructorTagId];
+      return next;
+    });
+    showStatusToast('강사 태그를 해제했습니다.');
+    closeInstructorTagDialog();
+  };
+
+  const appendInstructorRows = (rows: InstructorRow[]) => {
+    setInstructorRows((current) => [...rows, ...current]);
+  };
+
+  const saveInstructorDirectRegistration = (rows: InstructorRow[]) => {
+    appendInstructorRows(rows);
+    closeInstructorRegisterDialog();
+    showStatusToast(`${rows.length}명의 강사를 등록했습니다.`);
+  };
+
+  const saveInstructorExcelRegistration = (rows: InstructorRow[]) => {
+    appendInstructorRows(rows);
+    closeInstructorExcelRegisterDialog();
+    showStatusToast(`${rows.length}명의 강사를 엑셀로 등록했습니다.`);
+  };
+
   const showSaveModal = (message = '저장되었습니다.') => {
     const visibleDuration = 2200;
 
@@ -3433,9 +3832,16 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
     setIsLogoutDialogOpen(false);
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     setIsSidebarProfileMenuOpen(false);
     setIsLogoutDialogOpen(false);
+    setAuthProfile(null);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('crm-login-email');
+    }
+    if (isSupabaseConfigured) {
+      await getSupabaseClient().auth.signOut();
+    }
     setActiveWorkspace('스팩');
     setActiveCompanyView('기업');
     setHighlightedCompanyKey(null);
@@ -3447,6 +3853,45 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
     setActiveCompanyReplyComposerKey(null);
     setOpenContactMenuId(null);
     setActiveContactMemoPopoverId(null);
+  };
+
+  const handleLogin = async ({ email, password, rememberId }: { email: string; password: string; rememberId: boolean }) => {
+    setLoginErrorMessage(null);
+    setIsLoginSubmitting(true);
+
+    try {
+      const user = await signInWithEmailPassword(email, password);
+      if (!user) {
+        throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
+      }
+
+      const profile = await loadAuthUserProfile(user.id);
+      if (!profile) {
+        await getSupabaseClient().auth.signOut();
+        throw new Error('로그인한 계정의 사용자 정보를 찾을 수 없습니다.');
+      }
+
+      if (!isAllowedLoginRole(profile.role)) {
+        await getSupabaseClient().auth.signOut();
+        throw new Error('MASTER 또는 ADMIN 계정만 로그인할 수 있습니다.');
+      }
+
+      setAuthProfile(profile);
+      setActiveWorkspace(getWorkspaceFromBrand(profile.brand));
+      if (typeof window !== 'undefined') {
+        if (rememberId) {
+          window.localStorage.setItem('crm-login-email', email);
+        } else {
+          window.localStorage.removeItem('crm-login-email');
+        }
+      }
+    } catch (error) {
+      setAuthProfile(null);
+      setLoginErrorMessage(resolveLoginErrorMessage(error));
+    } finally {
+      setIsAuthLoading(false);
+      setIsLoginSubmitting(false);
+    }
   };
 
   const savePasswordChange = () => {
@@ -3707,7 +4152,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
 	                <th scope="col">이메일</th>
                 <th scope="col">연락처</th>
                 <th scope="col">참여이력</th>
-                <th scope="col">가입여부</th>
+                <th scope="col">가입 완료 여부</th>
                 <th scope="col">마케팅수신동의</th>
                 <th scope="col">태그 / 메모</th>
                 <th scope="col">더보기</th>
@@ -3849,30 +4294,20 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                     </td>
                     <td>
                       <div className="company-detail__contact-inline-actions">
-                        <button
-                          type="button"
-                          className="company-detail__contact-tag-dot"
-                          aria-label={contactTaggedById[contact.id] ? '태그 해제' : '태그 추가'}
+                        <TagToggleAction
+                          isTagged={Boolean(contactTaggedById[contact.id])}
+                          dotClassName="company-detail__contact-tag-dot"
+                          dotActiveClassName="company-detail__title-dot--active"
+                          markClassName="company-detail__title-dot"
+                          labelClassName="company-detail__contact-tag-action"
+                          labelActiveClassName="company-detail__contact-tag-action--active"
+                          ariaLabel={contactTaggedById[contact.id] ? '태그 해제' : '태그 추가'}
                           onClick={() =>
                             contactTaggedById[contact.id]
                               ? openContactTagRemovalDialog(contact.id)
                               : openContactTagDialog(contact.id)
                           }
-                          >
-                            <span
-                              className={`company-detail__title-dot ${
-                                contactTaggedById[contact.id] ? 'company-detail__title-dot--active' : ''
-                              }`}
-                              aria-hidden="true"
-                            />
-                        </button>
-                        <button
-                          type="button"
-                          className={`company-detail__contact-tag-action ${contactTaggedById[contact.id] ? 'company-detail__contact-tag-action--active' : ''}`}
-                          onClick={() => openContactTagDialog(contact.id)}
-                        >
-                          {contactTaggedById[contact.id] ? '태그 해제' : '태그 추가'}
-                        </button>
+                        />
                         <div
                           className={`company-detail__contact-message-wrap ${
                             activeTableContactMemoPopover?.contactId === contact.id ? 'company-detail__contact-message-wrap--open' : ''
@@ -4366,29 +4801,32 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                   </div>
 
                   <div className="company-card__meta-right">
-                    <span
-                      className={`company-card__reply-tag-dot ${companyTaggedByKey[companyKey] ? 'company-card__reply-tag-dot--active' : ''}`}
-                      aria-hidden="true"
-                    />
-                    <button
-                      type="button"
-                      className={`company-card__tag-action ${companyTaggedByKey[companyKey] ? 'company-card__tag-action--active' : ''}`}
-                      aria-label={`${company.name} ${companyTaggedByKey[companyKey] ? '태그 해제' : '태그 추가'}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
+                    <TagToggleAction
+                      isTagged={Boolean(companyTaggedByKey[companyKey])}
+                      dotMode="decorative"
+                      dotClassName="company-card__reply-tag-dot"
+                      dotActiveClassName="company-card__reply-tag-dot--active"
+                      markClassName="company-card__tag-dot-mark"
+                      labelClassName="company-card__tag-action"
+                      labelActiveClassName="company-card__tag-action--active"
+                      ariaLabel={`${company.name} ${companyTaggedByKey[companyKey] ? '태그 해제' : '태그 추가'}`}
+                      stopPropagation
+                      onClick={() => {
                         if (companyTaggedByKey[companyKey]) {
                           openCompanyTagRemovalDialog(companyKey);
                           return;
                         }
                         openCompanyTagDialog(companyKey);
                       }}
+                    />
+                    <div
+                      className={`company-detail__contact-message-wrap ${
+                        isCompanyReplyPopoverOpen ? 'company-detail__contact-message-wrap--open' : ''
+                      }`}
                     >
-                      <span>{companyTaggedByKey[companyKey] ? '태그 해제' : '태그 추가'}</span>
-                    </button>
-                    <div className={`company-card__reply-wrap ${isCompanyReplyPopoverOpen ? 'company-card__reply-wrap--open' : ''}`}>
                       <button
                         type="button"
-                        className="company-card__reply-count"
+                        className="company-detail__contact-message-meta"
                         aria-label={`${company.name} 메모 ${companyReplyMemos.length}개 보기`}
                         aria-expanded={isCompanyReplyPopoverOpen}
                         onClick={(event) => {
@@ -4396,37 +4834,37 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                           toggleCompanyReplyPopover(companyKey);
                         }}
                       >
-                        <AssetIcon src="/assets/chat.svg" className="company-card__reply-icon" />
-                        <span>{companyReplyMemos.length}</span>
+                        <AssetIcon src="/assets/chat.svg" className="company-detail__contact-message-icon" />
+                        <span className="company-detail__contact-message-count">{companyReplyMemos.length}</span>
                       </button>
-                      <div className="company-card__reply-popover" role="tooltip">
-                        <div className="company-card__reply-popover-head">
-                          <div className="company-card__reply-popover-title">메모</div>
+                      <div className="company-detail__contact-memo-popover" role="tooltip">
+                        <div className="company-detail__contact-memo-popover-head">
+                          <div className="company-detail__contact-memo-popover-title">메모</div>
                           <button
                             type="button"
-                            className="company-card__reply-add"
+                            className="company-detail__contact-memo-add"
                             onClick={() => openCompanyReplyComposer(companyKey)}
                           >
                             메모 추가
                           </button>
                         </div>
                         {isCompanyReplyPopoverOpen && activeCompanyReplyComposerKey === companyKey ? (
-                          <div className="company-card__reply-composer">
+                          <div className="company-detail__contact-memo-composer">
                             <textarea
-                              className="company-card__reply-input"
+                              className="company-detail__contact-memo-input"
                               value={companyReplyDraft}
                               onChange={(event) => handleCompanyMemoDraftChange(companyKey, event.target.value)}
                               placeholder="메모를 입력하세요"
                               rows={3}
                             />
-                            <div className="company-card__reply-editor-actions">
-                              <button type="button" className="company-card__reply-save" onClick={() => handleSaveCompanyMemo(companyKey)}>
+                            <div className="company-detail__contact-memo-editor-actions">
+                              <button type="button" className="company-detail__contact-memo-save" onClick={() => handleSaveCompanyMemo(companyKey)}>
                                 {isEditingCompanyReply ? '수정' : '추가'}
                               </button>
                               {isEditingCompanyReply ? (
                                 <button
                                   type="button"
-                                  className="company-card__reply-cancel"
+                                  className="company-detail__contact-memo-cancel"
                                   onClick={() => {
                                     closeCompanyReplyComposer();
                                     handleCompanyMemoDraftChange(companyKey, '');
@@ -4437,7 +4875,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                               ) : (
                                 <button
                                   type="button"
-                                  className="company-card__reply-cancel"
+                                  className="company-detail__contact-memo-cancel"
                                   onClick={() => {
                                     closeCompanyReplyComposer();
                                     handleCompanyMemoDraftChange(companyKey, '');
@@ -4450,16 +4888,16 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                           </div>
                         ) : null}
                         {companyReplyMemos.length > 0 ? (
-                          <div className="company-card__reply-popover-list">
+                          <div className="company-detail__contact-memo-popover-list">
                             {companyReplyMemos.map((memo) => (
-                              <div key={memo.id} className="company-card__reply-popover-item">
-                                <div className="company-card__reply-popover-meta">
+                              <div key={memo.id} className="company-detail__contact-memo-item">
+                                <div className="company-detail__contact-memo-meta">
                                   <span>{memo.date}</span>
                                   <span>{memo.author}</span>
                                 </div>
                                 <p>{memo.memo}</p>
                                 {memo.isMine ? (
-                                  <div className="company-card__reply-popover-actions">
+                                  <div className="company-detail__contact-memo-actions">
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -4481,7 +4919,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                             ))}
                           </div>
                         ) : (
-                          <p className="company-card__reply-popover-empty">남긴 메모가 없습니다.</p>
+                          <p className="company-detail__contact-memo-popover-empty">남긴 메모가 없습니다.</p>
                         )}
                       </div>
                     </div>
@@ -4941,7 +5379,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
       const clickedCompanyLogoMenu = Boolean(companyDetailLogoMenuRef.current?.contains(target));
       const clickedFilterMenu = Boolean(filtersControlsRef.current?.contains(target));
       const clickedCompanyMenu = Boolean((target as Element | null)?.closest?.('.company-card__menu-wrap'));
-      const clickedCompanyReply = Boolean((target as Element | null)?.closest?.('.company-card__reply-wrap'));
+      const clickedCompanyReply = Boolean((target as Element | null)?.closest?.('.company-detail__contact-message-wrap'));
       const clickedContactMenu = Boolean((target as Element | null)?.closest?.('.company-detail__contact-menu-wrap'));
       const clickedContactMemo = Boolean((target as Element | null)?.closest?.('.company-detail__contact-message-wrap'));
       const clickedSidebarProfile = Boolean((target as Element | null)?.closest?.('.crm-sidebar__profile-wrap'));
@@ -5972,10 +6410,22 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
     });
   };
 
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        onRequestPasswordReset={() => showStatusToast('비밀번호 찾기 기능은 준비 중입니다.', 'error')}
+        onRequestSignup={() => showStatusToast('회원가입 기능은 준비 중입니다.', 'error')}
+        errorMessage={loginErrorMessage}
+        isSubmitting={isAuthLoading || isLoginSubmitting}
+      />
+    );
+  }
+
   return (
     <div className={`crm-shell ${isSidebarCollapsed ? 'crm-shell--sidebar-collapsed' : ''}`}>
       <aside className={`crm-sidebar ${isSidebarCollapsed ? 'crm-sidebar--collapsed' : ''}`} aria-label="사이드바">
-        <div className="crm-sidebar__scroll-area">
+        <div className="crm-sidebar__fixed-head">
           <div className="crm-sidebar__brand-row">
             <img className="crm-sidebar__brand" src="/assets/crm-logo.svg" alt="통합관리솔루션" />
             <div className="crm-sidebar__brand-actions" aria-label="도구">
@@ -5997,27 +6447,31 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
             </div>
           </div>
 
-          <div className="workspace-switch" role="tablist" aria-label="워크스페이스 전환">
-            <button
-              className={`workspace-switch__item ${activeWorkspace === '스팩' ? 'workspace-switch__item--active' : ''}`}
-              type="button"
-              aria-pressed={activeWorkspace === '스팩'}
-              onClick={() => setActiveWorkspace('스팩')}
-            >
-              <img className="workspace-switch__logo" src="/assets/sniperfactory.svg" alt="" aria-hidden="true" />
-              <span>스팩</span>
-            </button>
-            <button
-              className={`workspace-switch__item ${activeWorkspace === '인사' ? 'workspace-switch__item--active' : ''}`}
-              type="button"
-              aria-pressed={activeWorkspace === '인사'}
-              onClick={() => setActiveWorkspace('인사')}
-            >
-              <img className="workspace-switch__logo" src="/assets/insideout.svg" alt="" aria-hidden="true" />
-              <span>인사</span>
-            </button>
-          </div>
+          {isMasterAccount ? (
+            <div className="workspace-switch" role="tablist" aria-label="워크스페이스 전환">
+              <button
+                className={`workspace-switch__item ${activeWorkspace === '스팩' ? 'workspace-switch__item--active' : ''}`}
+                type="button"
+                aria-pressed={activeWorkspace === '스팩'}
+                onClick={() => setActiveWorkspace('스팩')}
+              >
+                <img className="workspace-switch__logo" src="/assets/sniperfactory.svg" alt="" aria-hidden="true" />
+                <span>스팩</span>
+              </button>
+              <button
+                className={`workspace-switch__item ${activeWorkspace === '인사' ? 'workspace-switch__item--active' : ''}`}
+                type="button"
+                aria-pressed={activeWorkspace === '인사'}
+                onClick={() => setActiveWorkspace('인사')}
+              >
+                <img className="workspace-switch__logo" src="/assets/insideout.svg" alt="" aria-hidden="true" />
+                <span>인사</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
 
+        <div className="crm-sidebar__scroll-area">
           <nav className="sidebar-nav" aria-label="주요 메뉴">
             {sidebarItems.map((item) => (
               <div key={item.label} className="sidebar-nav__entry">
@@ -6032,6 +6486,7 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                   item={item}
                   open={Boolean(openSections[item.label])}
                   activeLabel={activeTabLabel}
+                  badgeCount={item.label === '공지사항' ? noticeUnreadCount : 0}
                   onToggle={() =>
                     setOpenSections((current) => ({
                       ...current,
@@ -6044,16 +6499,6 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
               </div>
             ))}
           </nav>
-
-          <section className="favorites" aria-label="즐겨찾는 교육과정">
-            <div className="favorites__title">즐겨찾는 교육과정</div>
-            {favoriteCourses.map((course, index) => (
-              <div key={`${course.label}-${index}`} className={`favorite-card ${course.featured ? 'favorite-card--featured' : ''}`}>
-                <span className="favorite-card__label">{course.label}</span>
-                <FavoriteStarIcon featured={Boolean(course.featured)} />
-              </div>
-            ))}
-          </section>
 
         </div>
 
@@ -6080,11 +6525,11 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
             onClick={openSidebarProfileMenu}
           >
             <span className="crm-sidebar__profile-avatar" aria-hidden="true">
-              오
+              {profileDisplayName.charAt(0)}
             </span>
             <span className="crm-sidebar__profile-copy">
-              <span className="crm-sidebar__profile-name">오민진(안나)</span>
-              <span className="crm-sidebar__profile-role">운영 관리자</span>
+              <span className="crm-sidebar__profile-name">{profileDisplayName}</span>
+              <span className="crm-sidebar__profile-role">{profileDisplayRole}</span>
             </span>
           </button>
 
@@ -6127,7 +6572,17 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
           </div>
         </div>
 
-        {isCompanyManagementPage ? (
+        {isNoticePage ? (
+          <NoticeManagementPage currentUser={authProfile} onUnreadCountChange={setNoticeUnreadCount} />
+        ) : isBusinessManagementPage ? (
+          <BusinessManagementPage
+            companyOptions={Array.from(new Set(companyRows.map((company) => company.name)))}
+            instructorOptions={Array.from(new Set(instructorRows.map((instructor) => instructor.name)))}
+            mentorOptions={Array.from(new Set(mentorRows.map((mentor) => mentor.name)))}
+            workspace={activeWorkspace}
+            currentUser={authProfile}
+          />
+        ) : isCompanyManagementPage ? (
           <>
             {!isCompanyDetailView ? (
           <section className="title-section" aria-label="페이지 제목">
@@ -6593,18 +7048,13 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                               <div className="company-detail__summary-value-box">
                                 {isCompanyDetailEditing && companyDetailEditDraft ? (
                                   <div className="company-detail__summary-split-fields">
-                                    <select
-                                      className="company-detail__summary-input company-detail__summary-select"
+                                    <DropdownSelect
+                                      label="1차 업종"
                                       value={companyDetailEditDraft.primaryIndustry}
-                                      onChange={(event) => updateCompanyDetailIndustryDraft(event.target.value)}
-                                      aria-label="1차 업종"
-                                    >
-                                      {industryOptions.map((option) => (
-                                        <option key={option.primary} value={option.primary}>
-                                          {option.primary}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      placeholder="1차 업종 선택"
+                                      options={industryOptions.map((option) => ({ label: option.primary, value: option.primary }))}
+                                      onChange={(nextValue) => updateCompanyDetailIndustryDraft(nextValue)}
+                                    />
                                     <div className="company-detail__summary-checklist-shell" aria-label="세부 업종">
                                       <div className="company-detail__summary-checklist-head">
                                         <span className="company-detail__summary-checklist-title">세부 업종</span>
@@ -7143,113 +7593,45 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
                 </div>
               </section>
 
-              <aside
-                className={`company-detail-memo-panel ${
-                  isCompanyMemoPanelCollapsed ? 'company-detail-memo-panel--collapsed' : ''
-                }`}
-                aria-label="담당자 메모"
-              >
-                {isCompanyMemoPanelCollapsed ? (
-                  <button
-                    type="button"
-                    className="company-detail__memo-floating-toggle company-detail__memo-floating-toggle--collapsed company-detail__memo-floating-toggle--with-tooltip"
-                    aria-label="메모 열기"
-                    aria-pressed={isCompanyMemoPanelCollapsed}
-                    onClick={() => setIsCompanyMemoPanelCollapsed(false)}
-                    data-tooltip="메모 열기"
-                    data-tooltip-side="left"
-                  >
-                    <AssetIcon src="/assets/pannel.svg" className="company-detail__memo-floating-toggle-icon" />
-                  </button>
-                ) : null}
-                <div className="company-detail__memo-section">
-                  <div className="company-detail__memo-title-row">
-                    <div className="company-detail__memo-title">메모</div>
-                    <button
-                      type="button"
-                      className="company-detail__memo-toggle company-detail__memo-toggle--with-tooltip"
-                      aria-label="메모 닫기"
-                      aria-pressed={false}
-                      onClick={() => setIsCompanyMemoPanelCollapsed(true)}
-                      data-tooltip="메모 닫기"
-                      data-tooltip-side="left"
-                    >
-                      <AssetIcon src="/assets/pannel.svg" className="company-detail__memo-toggle-icon" />
-                    </button>
-                  </div>
-                  <div className="company-detail__memo-note">가장 최근에 작성한 메모가 상단에 표시됩니다.</div>
-
-                  {!isCompanyMemoPanelCollapsed ? (
-                    <>
-                      <div className="company-detail__memo-list">
-                        {orderedCompanyMemoEntries.map((memo) => (
-                          <article key={memo.id} className="company-detail__memo-item">
-                            <div className="company-detail__memo-head">
-                              <div className="company-detail__memo-meta">
-                                <span className="company-detail__memo-date">{memo.date}</span>
-                                <span className="company-detail__memo-author">{memo.author}</span>
-                              </div>
-                              <div className="company-detail__memo-actions">
-                                {memo.isMine ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="company-detail__memo-action"
-                                      aria-label="메모 편집"
-                                      onClick={() => handleEditCompanyMemo(selectedDetailCompanyKey!, memo)}
-                                    >
-                                      <AssetIcon src="/assets/edit.svg" className="company-detail__memo-action-icon" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="company-detail__memo-action"
-                                      aria-label="메모 삭제"
-                                      onClick={() =>
-                                        setPendingDeleteDialog({
-                                          kind: 'company_memo',
-                                          companyKey: selectedDetailCompanyKey!,
-                                          memoId: memo.id,
-                                        })
-                                      }
-                                    >
-                                      <AssetIcon src="/assets/trash.svg" className="company-detail__memo-action-icon" />
-                                    </button>
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
-                            <div className="company-detail__memo-body">{memo.memo}</div>
-                          </article>
-                        ))}
-                      </div>
-
-                      <div className="company-detail__memo-editor">
-                        <div className="company-detail__memo-editor-head">
-                          <div className="company-detail__memo-editor-title">
-                            {activeCompanyMemoEditTarget ? '메모 수정 : Enter / 줄바꿈 : Shift + Enter' : '메모 등록 : Enter / 줄바꿈 : Shift + Enter'}
-                          </div>
-                          <button type="button" className="company-detail__memo-submit" onClick={() => handleSaveCompanyMemo(selectedDetailCompanyKey!)}>
-                            {activeCompanyMemoEditTarget ? '수정' : '등록'}
-                          </button>
-                        </div>
-                        <textarea
-                          ref={companyMemoInputRef}
-                          className="company-detail__memo-input"
-                          value={activeCompanyMemoDraft}
-                          onChange={(event) => handleCompanyMemoDraftChange(selectedDetailCompanyKey!, event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key !== 'Enter' || event.shiftKey) return;
-                            event.preventDefault();
-                            handleSaveCompanyMemo(selectedDetailCompanyKey!);
-                          }}
-                          placeholder="메모를 입력하세요"
-                          rows={4}
-                        />
-                      </div>
-                    </>
-	                  ) : null}
-	                </div>
-	              </aside>
+              <DetailMemoPanel
+                ariaLabel="담당자 메모"
+                title="메모"
+                note="가장 최근에 작성한 메모가 상단에 표시됩니다."
+                items={orderedCompanyMemoEntries.map((memo) => ({
+                  id: memo.id,
+                  date: memo.date,
+                  author: memo.author,
+                  body: memo.memo,
+                  onEdit: memo.isMine ? () => handleEditCompanyMemo(selectedDetailCompanyKey!, memo) : undefined,
+                  onDelete: memo.isMine
+                    ? () =>
+                        setPendingDeleteDialog({
+                          kind: 'company_memo',
+                          companyKey: selectedDetailCompanyKey!,
+                          memoId: memo.id,
+                        })
+                    : undefined,
+                }))}
+                emptyMessage="등록된 메모가 없습니다."
+                collapsed={isCompanyMemoPanelCollapsed}
+                onToggleCollapsed={setIsCompanyMemoPanelCollapsed}
+                composer={{
+                  mode: 'textarea',
+                  title: activeCompanyMemoEditTarget ? '메모 수정 : Enter / 줄바꿈 : Shift + Enter' : '메모 등록 : Enter / 줄바꿈 : Shift + Enter',
+                  submitLabel: activeCompanyMemoEditTarget ? '수정' : '등록',
+                  value: activeCompanyMemoDraft,
+                  onChange: (value) => handleCompanyMemoDraftChange(selectedDetailCompanyKey!, value),
+                  onSubmit: () => handleSaveCompanyMemo(selectedDetailCompanyKey!),
+                  onKeyDown: (event) => {
+                    if (event.key !== 'Enter' || event.shiftKey) return;
+                    event.preventDefault();
+                    handleSaveCompanyMemo(selectedDetailCompanyKey!);
+                  },
+                  placeholder: '메모를 입력하세요',
+                  rows: 4,
+                  inputRef: companyMemoInputRef,
+                }}
+              />
 
               {pendingDeleteDialog?.kind === 'company_memo' ? (
                 <div
@@ -7295,9 +7677,54 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
           companyContactsListContent
         )}
           </>
+        ) : isMemberManagementPage ? (
+          <MemberManagementPage workspace={activeWorkspace} currentUser={authProfile} />
+        ) : isInstructorManagementPage ? (
+          isInstructorDetailView && selectedInstructor ? (
+            <InstructorDetailPage
+              instructor={selectedInstructor}
+              isTagged={Boolean(taggedInstructorIds[selectedInstructor.id])}
+              memoText={instructorTagNotesById[selectedInstructor.id] ?? ''}
+              onBack={closeInstructorDetail}
+              onCopyValue={(value) => void copyTextToClipboard(value)}
+              onOpenMemo={() => openInstructorTagDialog(selectedInstructor.id)}
+              onOpenTag={() =>
+                taggedInstructorIds[selectedInstructor.id]
+                  ? openInstructorTagRemovalDialog(selectedInstructor.id)
+                  : openInstructorTagDialog(selectedInstructor.id)
+              }
+            />
+          ) : (
+            <InstructorManagementPage
+              instructors={instructorRows}
+              mentors={mentorRows}
+              taggedInstructorIds={taggedInstructorIds}
+              instructorMemoCountsById={instructorMemoCountsById}
+              activeInstructorId={selectedInstructorId}
+              onOpenInstructorDetail={openInstructorDetail}
+              onOpenInstructorMemo={openInstructorTagDialog}
+              onOpenDirectRegister={openInstructorRegisterDialog}
+              onOpenExcelRegister={openInstructorExcelRegisterDialog}
+              onOpenInstructorTag={(instructorId) =>
+                taggedInstructorIds[instructorId] ? openInstructorTagRemovalDialog(instructorId) : openInstructorTagDialog(instructorId)
+              }
+            />
+          )
         ) : (
           <BlankPage title={activeTabLabel} description="이 메뉴는 별도 페이지로 분리해 둘 수 있습니다." />
         )}
+        <InstructorRegistrationDialogs
+          isDirectOpen={isInstructorRegisterDialogOpen}
+          isExcelOpen={isInstructorExcelRegisterDialogOpen}
+          existingInstructors={instructorRows}
+          organizationOptions={contactCompanyOptions}
+          courseOptions={contactParticipationOptions}
+          onCloseDirect={closeInstructorRegisterDialog}
+          onCloseExcel={closeInstructorExcelRegisterDialog}
+          onSaveDirect={saveInstructorDirectRegistration}
+          onSaveExcel={saveInstructorExcelRegistration}
+          onNotify={showStatusToast}
+        />
         {copyToastMounted ? (
           <div className={`copy-toast ${copyToastVisible ? 'copy-toast--visible' : 'copy-toast--hidden'}`} role="status" aria-live="polite">
             복사되었습니다.
@@ -8838,129 +9265,69 @@ const createCompanyDetailEditDraft = (company: CompanyRow): CompanyDetailEditDra
       ) : null}
 
       {isCompanyTagDialogOpen && activeCompanyTagKey ? (
-        <div
-          className="company-tag-dialog"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeCompanyTagDialog();
-            }
-          }}
-        >
-          <div className="company-tag-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="company-tag-dialog-title">
-            <div className="company-tag-dialog__header">
-              <div>
-                <div className="company-tag-dialog__eyebrow">{companyTagDialogMode === 'remove' ? '태그 해제' : '태그 추가'}</div>
-                <h2 id="company-tag-dialog-title" className="company-tag-dialog__title">
-                  {companyTagDialogMode === 'remove' ? '태그를 해제 하시겠습니까?' : '태그를 설정하시겠습니까?'}
-                </h2>
-              </div>
-              <button type="button" className="company-tag-dialog__close" onClick={closeCompanyTagDialog} aria-label="태그 설정 창 닫기">
-                ×
-              </button>
-            </div>
-
-            <div className="company-tag-dialog__body">
-              {companyTagDialogMode === 'remove' ? (
-                <p className="company-tag-dialog__description">작성된 메모는 삭제되지 않습니다.</p>
-              ) : (
-                <>
-                  <p className="company-tag-dialog__description">메모는 선택 사항입니다. 필요하면 태그와 함께 참고 메모를 남겨두세요.</p>
-
-                  <label className="company-tag-dialog__field">
-                    <span className="company-tag-dialog__label">메모</span>
-                    <textarea
-                      ref={companyTagDialogInputRef}
-                      value={companyTagMemoDraft}
-                      onChange={(event) => setCompanyTagMemoDraft(event.target.value)}
-                      placeholder="예: 이번 분기 우선 연락"
-                      rows={5}
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-
-            <div className="company-tag-dialog__actions">
-              <button type="button" className="company-tag-dialog__secondary" onClick={closeCompanyTagDialog}>
-                취소
-              </button>
-              <button
-                type="button"
-                className="company-tag-dialog__primary"
-                onClick={companyTagDialogMode === 'remove' ? confirmCompanyTagRemoval : saveCompanyTagMemo}
-              >
-                {companyTagDialogMode === 'remove' ? '확인' : '저장'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <TagDialog
+          titleId="company-tag-dialog-title"
+          eyebrow={companyTagDialogMode === 'remove' ? '태그 해제' : '태그 추가'}
+          title={companyTagDialogMode === 'remove' ? '태그를 해제 하시겠습니까?' : '태그를 설정하시겠습니까?'}
+          description={
+            companyTagDialogMode === 'remove'
+              ? '작성된 메모는 삭제되지 않습니다.'
+              : '메모는 선택 사항입니다. 필요하면 태그와 함께 참고 메모를 남겨두세요.'
+          }
+          isRemoval={companyTagDialogMode === 'remove'}
+          value={companyTagMemoDraft}
+          placeholder="예: 이번 분기 우선 연락"
+          confirmLabel={companyTagDialogMode === 'remove' ? '확인' : '저장'}
+          onChange={setCompanyTagMemoDraft}
+          onClose={closeCompanyTagDialog}
+          onConfirm={companyTagDialogMode === 'remove' ? confirmCompanyTagRemoval : saveCompanyTagMemo}
+        />
       ) : null}
 
       {isContactTagDialogOpen && activeContactTagId ? (
-        <div
-          className="company-tag-dialog"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeContactTagDialog();
-            }
-          }}
-        >
-          <div className="company-tag-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="contact-tag-dialog-title">
-            <div className="company-tag-dialog__header">
-              <div>
-                <div className="company-tag-dialog__eyebrow">{contactTagDialogMode === 'remove' ? '태그 해제' : '담당자 태그'}</div>
-                <h2 id="contact-tag-dialog-title" className="company-tag-dialog__title">
-                  {contactTagDialogMode === 'remove'
-                    ? '태그를 해제 하시겠습니까?'
-                    : activeContactMemoEditId
-                      ? '담당자 메모를 수정하세요'
-                      : '담당자 메모를 남기세요'}
-                </h2>
-              </div>
-              <button type="button" className="company-tag-dialog__close" onClick={closeContactTagDialog} aria-label="담당자 태그 메모 창 닫기">
-                ×
-              </button>
-            </div>
+        <TagDialog
+          titleId="contact-tag-dialog-title"
+          eyebrow={contactTagDialogMode === 'remove' ? '태그 해제' : '담당자 태그'}
+          title={
+            contactTagDialogMode === 'remove'
+              ? '태그를 해제 하시겠습니까?'
+              : activeContactMemoEditId
+                ? '담당자 메모를 수정하세요'
+                : '담당자 메모를 남기세요'
+          }
+          description={
+            contactTagDialogMode === 'remove'
+              ? '작성된 메모는 삭제되지 않습니다.'
+              : '저장한 메모는 chat 아이콘 툴팁에서 작성자와 작성 시간까지 함께 확인할 수 있습니다.'
+          }
+          isRemoval={contactTagDialogMode === 'remove'}
+          value={contactTagMemoDraft}
+          placeholder="예: 다음 캠페인 안내 시 우선 연락"
+          confirmLabel={contactTagDialogMode === 'remove' ? '확인' : activeContactMemoEditId ? '수정' : '저장'}
+          onChange={setContactTagMemoDraft}
+          onClose={closeContactTagDialog}
+          onConfirm={contactTagDialogMode === 'remove' ? confirmContactTagRemoval : saveContactTagMemo}
+        />
+      ) : null}
 
-            <div className="company-tag-dialog__body">
-              {contactTagDialogMode === 'remove' ? (
-                <p className="company-tag-dialog__description">작성된 메모는 삭제되지 않습니다.</p>
-              ) : (
-                <>
-                  <p className="company-tag-dialog__description">
-                    저장한 메모는 chat 아이콘 툴팁에서 작성자와 작성 시간까지 함께 확인할 수 있습니다.
-                  </p>
-
-                  <label className="company-tag-dialog__field">
-                    <span className="company-tag-dialog__label">메모</span>
-                    <textarea
-                      ref={contactTagDialogInputRef}
-                      value={contactTagMemoDraft}
-                      onChange={(event) => setContactTagMemoDraft(event.target.value)}
-                      placeholder="예: 다음 캠페인 안내 시 우선 연락"
-                      rows={5}
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-
-            <div className="company-tag-dialog__actions">
-              <button type="button" className="company-tag-dialog__secondary" onClick={closeContactTagDialog}>
-                취소
-              </button>
-              <button
-                type="button"
-                className="company-tag-dialog__primary"
-                onClick={contactTagDialogMode === 'remove' ? confirmContactTagRemoval : saveContactTagMemo}
-              >
-                {contactTagDialogMode === 'remove' ? '확인' : activeContactMemoEditId ? '수정' : '저장'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {isInstructorTagDialogOpen && activeInstructorTagId ? (
+        <TagDialog
+          titleId="instructor-tag-dialog-title"
+          eyebrow={instructorTagDialogMode === 'remove' ? '태그 해제' : '강사 태그'}
+          title={instructorTagDialogMode === 'remove' ? '태그를 해제 하시겠습니까?' : '강사 메모를 남기세요'}
+          description={
+            instructorTagDialogMode === 'remove'
+              ? '작성된 메모는 삭제되지 않습니다.'
+              : '강사 태그 메모는 이후 우선 섭외, 강의 운영 참고 메모로 활용할 수 있습니다.'
+          }
+          isRemoval={instructorTagDialogMode === 'remove'}
+          value={instructorTagMemoDraft}
+          placeholder="예: 데이터 분석 특강 우선 섭외"
+          confirmLabel={instructorTagDialogMode === 'remove' ? '확인' : '저장'}
+          onChange={setInstructorTagMemoDraft}
+          onClose={closeInstructorTagDialog}
+          onConfirm={instructorTagDialogMode === 'remove' ? confirmInstructorTagRemoval : saveInstructorTagMemo}
+        />
       ) : null}
 
       {isContactEditDialogOpen && contactEditDraft ? (
@@ -9312,6 +9679,7 @@ function SidebarMenuGroup({
   onToggle,
   collapsed,
   activeLabel,
+  badgeCount,
   onOpenPage,
 }: {
   item: SidebarItem;
@@ -9319,6 +9687,7 @@ function SidebarMenuGroup({
   onToggle: () => void;
   collapsed: boolean;
   activeLabel: string;
+  badgeCount: number;
   onOpenPage: (path: string[], label: string, iconSrc: string) => void;
 }) {
   const hasChildren = Boolean(item.children?.length);
@@ -9332,13 +9701,14 @@ function SidebarMenuGroup({
         aria-current={isActive ? 'page' : undefined}
         aria-expanded={hasChildren ? open : undefined}
         onClick={hasChildren ? onToggle : () => onOpenPage([item.label], item.label, item.iconSrc)}
-      >
-        <span className="sidebar-nav__icon" aria-hidden="true">
-          <SidebarIcon src={item.iconSrc} />
-        </span>
-        <span className="sidebar-nav__label">{item.label}</span>
-        {hasChildren ? <ToggleArrowIcon className="sidebar-nav__toggle-icon" open={open} /> : null}
-      </button>
+        >
+          <span className="sidebar-nav__icon" aria-hidden="true">
+            <SidebarIcon src={item.iconSrc} />
+          </span>
+          <span className="sidebar-nav__label">{item.label}</span>
+          {badgeCount > 0 ? <span className="sidebar-nav__badge" aria-label={`${badgeCount}개의 새 공지`}>N</span> : null}
+          {hasChildren ? <ToggleArrowIcon className="sidebar-nav__toggle-icon" open={open} /> : null}
+        </button>
 
       {hasChildren && open && !collapsed ? (
         <div className="sidebar-group__children">
@@ -9427,8 +9797,14 @@ function SidebarUtilityMenuItem({
   return (
     <button
       type="button"
-      className="sidebar-nav__item sidebar-nav__item--leaf crm-sidebar__utility-item"
-      onClick={() => {
+        className="sidebar-nav__item sidebar-nav__item--leaf crm-sidebar__utility-item"
+        onClick={() => {
+        if (item.href) {
+          window.open(item.href, '_blank', 'noopener,noreferrer');
+          onCloseServiceMenu();
+          return;
+        }
+
         if (!item.path) return;
         onOpenPage(item.path, item.label, item.iconSrc);
         onCloseServiceMenu();
@@ -9463,6 +9839,12 @@ function SidebarUtilityChildrenMenu({
           role="menuitem"
           className="sidebar-nav__item sidebar-nav__item--leaf crm-sidebar__utility-item crm-sidebar__utility-subitem"
           onClick={() => {
+            if (child.href) {
+              window.open(child.href, '_blank', 'noopener,noreferrer');
+              onCloseServiceMenu();
+              return;
+            }
+
             if (!child.path) return;
             onOpenPage(child.path, child.label, child.iconSrc);
             onCloseServiceMenu();
@@ -10383,6 +10765,19 @@ function EditIcon() {
   );
 }
 
-function FavoriteStarIcon({ featured }: { featured: boolean }) {
-  return <AssetIcon src="/assets/star.svg" className={`favorite-card__star ${featured ? 'favorite-card__star--featured' : ''}`} />;
+function formatAuthRoleLabel(role?: string | null) {
+  if (!role) return '운영 관리자';
+
+  switch (String(role).toUpperCase()) {
+    case 'MASTER':
+      return '마스터';
+    case 'ADMIN':
+      return '관리자';
+    case 'COMPANY':
+      return '기업 사용자';
+    case 'USER':
+      return '회원';
+    default:
+      return String(role);
+  }
 }

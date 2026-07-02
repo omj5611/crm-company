@@ -8,6 +8,7 @@ const WEBSITE_ICON_SRC = '/assets/website.svg';
 const SETTINGS_ICON_SRC = '/assets/settings.svg';
 const SNIPERFACTORY_LOGO_SRC = '/assets/sniperfactory.svg';
 const INSIDEOUT_LOGO_SRC = '/assets/insideout.svg';
+const NOTICE_ICON_SRC = '/assets/crm-notice.svg';
 
 export function Sidebar({
   sections,
@@ -40,31 +41,14 @@ export function Sidebar({
           </button>
         </div>
 
-        <div className="favorites">
-          <div className="favorites__label">즐겨찾는 교육과정</div>
-          {['AI로 완성하는 SNS 마케팅 프로젝트...', 'AI로 완성하는 SNS 마케팅 프로젝트...', 'AI로 완성하는 SNS 마케팅...'].map((item, index) => (
-            <div className="favorite-item" key={`${item}-${index}`}>
-              <span className="favorite-item__text">{item}</span>
-              <StarIcon className="favorite-item__star" />
-            </div>
-          ))}
-        </div>
-
         <nav className="menu">
-          <SidebarSection
+          <MenuItem icon={<MenuIcon src={NOTICE_ICON_SRC} className="sidebar-menu__icon" />} label="공지사항" active={activePageLabel === '공지사항'} highlighted={query ? '공지사항'.includes(query) : false} onOpenPage={() => onOpenPage('공지사항')} />
+          <MenuItem
             icon={<MenuIcon src={EDU_ICON_SRC} className="sidebar-menu__icon" />}
             label="사업 관리"
-            open={sections.curriculum}
-            onToggle={() => onToggleSection('curriculum')}
             onOpenPage={() => onOpenPage('사업 관리')}
-            highlighted={['사업 관리', '전체 교육과정 리스트', '교육과정 캘린더', '상세페이지 FAQ', '메인 FAQ', '사업페이지 FAQ', 'KDT', '중소기업인재키움'].some((item) =>
-              item.toLowerCase().includes(query),
-            )}
-            items={[
-              { label: '전체 교육과정 리스트' },
-              { label: '교육과정 캘린더' },
-              { label: '상세페이지 FAQ' },
-            ]}
+            active={activePageLabel === '사업 관리'}
+            highlighted={query ? '사업 관리'.includes(query) : false}
           />
           <SidebarSection
             label="회원관리"
@@ -83,7 +67,13 @@ export function Sidebar({
             icon={<MenuIcon src={USERS_ICON_SRC} className="sidebar-menu__icon" />}
           />
           <MenuItem icon={<MenuIcon src={COMPANY_ICON_SRC} className="sidebar-menu__icon" />} label="기업 관리" active={activePageLabel === '기업 관리'} highlighted={query ? '기업 관리'.includes(query) : false} onOpenPage={() => onOpenPage('기업 관리')} />
-          <MenuItem icon={<MenuIcon src={LECTURE_ICON_SRC} className="sidebar-menu__icon" />} label="강사관리" highlighted={query ? '강사관리'.includes(query) : false} onOpenPage={() => onOpenPage('강사관리')} />
+          <MenuItem
+            icon={<MenuIcon src={LECTURE_ICON_SRC} className="sidebar-menu__icon" />}
+            label="강사/멘토 관리"
+            active={activePageLabel === '강사/멘토 관리'}
+            highlighted={query ? '강사/멘토 관리'.includes(query) : false}
+            onOpenPage={() => onOpenPage('강사/멘토 관리')}
+          />
           <SidebarSection
             icon={<MenuIcon src={WEBSITE_ICON_SRC} className="sidebar-menu__icon" />}
             label="웹사이트관리"
@@ -224,14 +214,6 @@ function ChevronIcon({ rotated = false }: { rotated?: boolean }) {
       className={rotated ? 'chevron chevron--open' : 'chevron'}
     >
       <path d="M5 6L8 9L11 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function StarIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M8 2.4L9.6 5.7L13.2 6.2L10.6 8.6L11.3 12.1L8 10.4L4.7 12.1L5.4 8.6L2.8 6.2L6.4 5.7L8 2.4Z" fill="#FBBF24" />
     </svg>
   );
 }
